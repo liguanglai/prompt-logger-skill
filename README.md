@@ -11,6 +11,14 @@
 - 支持 Docker/DevContainer
 - 每个会话生成独立的日志文件
 
+## 平台差异
+
+| 平台 | 实现方式 | 生成文件 |
+|------|---------|---------|
+| macOS/Linux | Bash 脚本 | `claude_prompt-history-*.md` (含用户提示词 + Claude 响应) |
+| Windows | PowerShell + Node.js | `claude_prompt-history-*.md` (用户提示词) |
+| DevContainer | Bash 脚本 | 同 macOS/Linux |
+
 ## 安装
 
 ### 方式 1: Plugin 安装（推荐）
@@ -40,6 +48,10 @@ cd prompt-logger-skill-package
 # 下载并解压 prompt-logger-macos.tar.gz 后
 .\install.ps1
 ```
+
+**Windows 依赖:**
+- PowerShell 5.0+ (系统自带)
+- Node.js (用于导出完整对话)
 
 ### 方式 4: DevContainer 安装
 
@@ -80,6 +92,8 @@ curl -fsSL https://github.com/liguanglai/prompt-logger-skill/releases/latest/dow
 
 ## 日志格式示例
 
+### macOS/Linux/DevContainer
+
 ```markdown
 # Claude Code 对话历史记录
 
@@ -96,26 +110,29 @@ curl -fsSL https://github.com/liguanglai/prompt-logger-skill/releases/latest/dow
 
 好的，这是一个简单的 Python Hello World 程序：
 ...
+```
+
+### Windows
+
+```markdown
+# Claude Code Test Log
 
 ---
 
-### 👤 用户 #2 (2026-01-19 17:01:00)
+## 2026-01-19 17:00:15
 
-改成 JavaScript 版本
-
-### 🤖 Claude #2 (2026-01-19 17:01:15)
-
-好的，这是 JavaScript 版本：
-...
+```
+帮我写一个 Hello World 程序
+```
 ```
 
 ## 生成的文件
 
-| 文件 | 说明 |
-|------|------|
-| `claude_prompt-history-YYYYMMDD_HHMMSS.md` | 对话历史记录 |
-| `.claude_session_date` | 会话时间戳（隐藏文件） |
-| `.claude_msg_counter` | 消息编号计数器（隐藏文件） |
+| 文件 | 平台 | 说明 |
+|------|------|------|
+| `claude_prompt-history-YYYYMMDD_HHMMSS.md` | 全平台 | 对话历史记录 |
+| `.claude_session_date` | 全平台 | 会话时间戳（隐藏文件） |
+| `.claude_msg_counter` | macOS/Linux | 消息编号计数器（隐藏文件） |
 
 ## 依赖
 
@@ -123,7 +140,7 @@ curl -fsSL https://github.com/liguanglai/prompt-logger-skill/releases/latest/dow
 |------|------|
 | macOS | `jq` (`brew install jq`) |
 | Linux | `jq` (`apt install jq`) |
-| Windows | PowerShell 5.0+ (系统自带) |
+| Windows | PowerShell 5.0+ + Node.js |
 | DevContainer | 自动安装 `jq` |
 
 ## 文件结构
@@ -137,9 +154,12 @@ prompt-logger-skill/
 │   └── prompt-logger/
 │       └── SKILL.md             # Skill 定义
 ├── hooks/
-│   ├── session-start.sh         # 会话启动
-│   ├── log-prompt.sh            # 记录提示词
-│   └── log-response.sh          # 记录响应
+│   ├── session-start.sh         # 会话启动 (macOS/Linux)
+│   ├── session-start.ps1        # 会话启动 (Windows)
+│   ├── log-prompt.sh            # 记录提示词 (macOS/Linux)
+│   ├── log-prompt.ps1           # 记录提示词 (Windows)
+│   ├── log-response.sh          # 记录响应 (macOS/Linux)
+│   └── auto-export.js           # 导出对话 (Windows)
 ├── install.sh                   # 本地安装 (macOS/Linux)
 ├── install.ps1                  # 本地安装 (Windows)
 ├── install-devcontainer.sh      # DevContainer 配置 (macOS/Linux)
@@ -172,6 +192,7 @@ rm ~/.claude/hooks/log-response.sh
 Remove-Item -Recurse "$env:USERPROFILE\.claude\skills\prompt-logger"
 Remove-Item "$env:USERPROFILE\.claude\hooks\session-start.ps1"
 Remove-Item "$env:USERPROFILE\.claude\hooks\log-prompt.ps1"
+Remove-Item "$env:USERPROFILE\.claude\hooks\auto-export.js"
 # 手动编辑 settings.json 移除 hooks 配置
 ```
 
