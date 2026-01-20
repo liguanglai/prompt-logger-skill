@@ -69,8 +69,8 @@ docker-compose exec claude-code /bin/bash
 RUN apt-get update && apt-get install -y jq && rm -rf /var/lib/apt/lists/*
 
 # 下载并安装 Prompt Logger Skill
-RUN curl -LO https://github.com/liguanglai/macos_configs/releases/download/v1.1.0/prompt-logger-macos-v1.1.0.tar.gz \
-    && tar -xzf prompt-logger-macos-v1.1.0.tar.gz \
+RUN curl -LO https://github.com/liguanglai/prompt-logger-skill/releases/latest/download/prompt-logger-macos.tar.gz \
+    && tar -xzf prompt-logger-macos.tar.gz \
     && cd prompt-logger-skill-package \
     && mkdir -p /root/.claude/hooks /root/.claude/skills/prompt-logger \
     && cp hooks/*.sh /root/.claude/hooks/ \
@@ -78,7 +78,7 @@ RUN curl -LO https://github.com/liguanglai/macos_configs/releases/download/v1.1.
     && cp settings.json /root/.claude/settings.json \
     && chmod +x /root/.claude/hooks/*.sh \
     && cd .. \
-    && rm -rf prompt-logger-skill-package prompt-logger-macos-v1.1.0.tar.gz
+    && rm -rf prompt-logger-skill-package prompt-logger-macos.tar.gz
 
 # 设置环境变量
 ENV CLAUDE_PROJECT_DIR=/workspace
