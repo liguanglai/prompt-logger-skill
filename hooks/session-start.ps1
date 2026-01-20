@@ -1,11 +1,13 @@
 # Claude Code Session Start Script (Windows PowerShell)
-# Sets session creation date and writes to file for other hooks to read
+
+# Set UTF-8 encoding for stdin/stdout
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # Generate session date timestamp
 $SessionDate = Get-Date -Format "yyyyMMdd_HHmmss"
 
 # Read JSON input from stdin to get working directory
-# Claude Code passes: {"session_id":"...", "cwd":"...", ...}
 $input_text = [Console]::In.ReadToEnd()
 $WorkDir = $null
 
@@ -16,20 +18,7 @@ try {
     }
 } catch {}
 
-# Fallback methods if cwd not in JSON
-if ([string]::IsNullOrEmpty($WorkDir)) {
-    if ($env:CLAUDE_PROJECT_DIR) {
-        $WorkDir = $env:CLAUDE_PROJECT_DIR
-    } elseif ($PWD) {
-        $WorkDir = $PWD.Path
-    } else {
-        try {
-            $WorkDir = [System.IO.Directory]::GetCurrentDirectory()
-        } catch {}
-    }
-}
-
-# Final fallback to USERPROFILE
+# Fallback to USERPROFILE if no cwd
 if ([string]::IsNullOrEmpty($WorkDir)) {
     $WorkDir = $env:USERPROFILE
 }
@@ -38,12 +27,10 @@ if ([string]::IsNullOrEmpty($WorkDir)) {
 $SessionFile = Join-Path $WorkDir ".claude_session_date"
 $SessionDate | Out-File -FilePath $SessionFile -Encoding UTF8 -NoNewline
 
-# Set file as hidden (Windows)
+# Set file as hidden
 if (Test-Path $SessionFile) {
-    try {
-        $file = Get-Item $SessionFile -Force
-        $file.Attributes = $file.Attributes -bor [System.IO.FileAttributes]::Hidden
-    } catch {}
+    $file = Get-Item $SessionFile -Force
+    $file.Attributes = $file.Attributes -bor [System.IO.FileAttributes]::Hidden
 }
 
 exit 0
