@@ -22,7 +22,7 @@
 /plugin marketplace add liguanglai/prompt-logger-skill
 
 # 安装插件
-/plugin install prompt-logger@liguanglai-plugins
+/plugin install prompt-logger@ligl-plugins
 ```
 
 ### 方式 2: 本地安装 (macOS / Linux)

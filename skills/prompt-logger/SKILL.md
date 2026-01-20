@@ -2,7 +2,7 @@
 name: prompt-logger
 description: 自动记录所有用户提示词和 Claude 响应到项目的 claude_prompt-history-{启动日期}.md 文件。当用户询问提示词历史、想要查看之前的对话记录、或需要回顾之前的请求时使用此 Skill。
 version: 1.1.0
-author: liguanglai
+author: ligl
 ---
 
 # Prompt Logger - 对话记录器

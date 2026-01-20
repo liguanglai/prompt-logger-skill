@@ -1,8 +1,8 @@
 {
-  "name": "liguanglai-plugins",
-  "description": "liguanglai's Claude Code plugins collection",
+  "name": "ligl-plugins",
+  "description": "ligl's Claude Code plugins collection",
   "owner": {
-    "name": "liguanglai",
+    "name": "ligl",
     "url": "https://github.com/liguanglai"
   },
   "plugins": [
@@ -12,7 +12,7 @@
       "description": "自动记录 Claude Code 对话（用户提示词 + Claude 响应）到项目目录",
       "version": "1.1.0",
       "author": {
-        "name": "liguanglai"
+        "name": "ligl"
       },
       "keywords": ["prompt", "logger", "history", "conversation"]
     }
