@@ -1,31 +1,48 @@
-# Claude Code 提示词记录脚本 (Windows PowerShell)
-# 在记录用户输入前，先补记上一条 Claude 响应
-# 支持对话编号功能
+# Claude Code Prompt Logger (Windows PowerShell)
+# Records user prompts and backfills Claude responses
+# Supports conversation numbering
 
-# 从 stdin 读取 JSON 输入
+# Read JSON input from stdin
+# Claude Code passes: {"session_id":"...", "transcript_path":"...", "cwd":"...", "prompt":"...", ...}
 $inputData = [Console]::In.ReadToEnd()
 
-# 解析 JSON
+# Parse JSON
 try {
     $data = $inputData | ConvertFrom-Json
 } catch {
     exit 0
 }
 
-# 提取字段
+# Extract fields
 $UserPrompt = $data.prompt
 $SessionId = $data.session_id
 $TranscriptPath = $data.transcript_path
+$WorkDir = $data.cwd
 
-# 如果没有 prompt，退出
+# Exit if no prompt
 if (-not $UserPrompt) {
     exit 0
 }
 
-# 使用 CLAUDE_PROJECT_DIR（Claude 启动目录）
-$WorkDir = if ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { Get-Location }
+# Fallback methods if cwd not in JSON
+if ([string]::IsNullOrEmpty($WorkDir)) {
+    if ($env:CLAUDE_PROJECT_DIR) {
+        $WorkDir = $env:CLAUDE_PROJECT_DIR
+    } elseif ($PWD) {
+        $WorkDir = $PWD.Path
+    } else {
+        try {
+            $WorkDir = [System.IO.Directory]::GetCurrentDirectory()
+        } catch {}
+    }
+}
 
-# 获取会话日期
+# Final fallback to USERPROFILE
+if ([string]::IsNullOrEmpty($WorkDir)) {
+    $WorkDir = $env:USERPROFILE
+}
+
+# Get session date
 $SessionFile = Join-Path $WorkDir ".claude_session_date"
 if (Test-Path $SessionFile) {
     $SessionDate = Get-Content $SessionFile -Raw
@@ -38,37 +55,35 @@ $LogFile = Join-Path $WorkDir "claude_prompt-history-$SessionDate.md"
 $CounterFile = Join-Path $WorkDir ".claude_msg_counter"
 $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
-# 获取当前消息编号
+# Get current message number
 if (Test-Path $CounterFile) {
     $MsgNum = [int](Get-Content $CounterFile -Raw).Trim()
 } else {
     $MsgNum = 0
 }
 
-# 如果文件不存在，创建带标题的文件
+# Code fence marker
+$CodeFence = '```'
+
+# Create file with header if it does not exist
 if (-not (Test-Path $LogFile)) {
     $DisplayDate = $SessionDate -replace '_', ' ' -replace '(\d{4})(\d{2})(\d{2})', '$1-$2-$3' -replace ' (\d{2})(\d{2})(\d{2})', ' $1:$2:$3'
-    $Header = @"
-# Claude Code 对话历史记录
-
-**会话启动时间**: $DisplayDate
-**工作目录**: $WorkDir
-
----
-
-"@
+    $Header = "# Claude Code Conversation History`r`n`r`n"
+    $Header += "**Session Start**: $DisplayDate`r`n"
+    $Header += "**Working Directory**: $WorkDir`r`n`r`n"
+    $Header += "---`r`n"
     $Header | Out-File -FilePath $LogFile -Encoding UTF8
 }
 
-# === 补记上一条 Claude 响应 ===
+# === Backfill previous Claude response ===
 if ($TranscriptPath -and (Test-Path $TranscriptPath)) {
-    # 检查日志文件最后是否是用户输入（有 👤 用户 但没有对应的 🤖 Claude）
+    # Check if last entry in log is user input without Claude response
     $LastContent = Get-Content $LogFile -Tail 20 -ErrorAction SilentlyContinue
     $LastContentStr = $LastContent -join "`n"
 
-    # 查找最后的用户和 Claude 标记
-    $UserMatches = [regex]::Matches($LastContentStr, "👤 用户")
-    $ClaudeMatches = [regex]::Matches($LastContentStr, "🤖 Claude")
+    # Find last user and Claude markers
+    $UserMatches = [regex]::Matches($LastContentStr, "User #\d+")
+    $ClaudeMatches = [regex]::Matches($LastContentStr, "Claude #\d+")
 
     $HasUnmatchedUser = $false
     if ($UserMatches.Count -gt 0) {
@@ -84,7 +99,7 @@ if ($TranscriptPath -and (Test-Path $TranscriptPath)) {
     }
 
     if ($HasUnmatchedUser) {
-        # 从 JSONL 文件中提取最后一条有文本内容的 assistant 消息
+        # Extract last assistant message with text content from JSONL
         $Lines = Get-Content $TranscriptPath -Encoding UTF8
         [array]::Reverse($Lines)
 
@@ -108,31 +123,17 @@ if ($TranscriptPath -and (Test-Path $TranscriptPath)) {
         }
 
         if ($LastResponse) {
-            $ResponseBlock = @"
-
-### 🤖 Claude #$MsgNum ($Timestamp)
-
-$LastResponse
-
----
-
-"@
+            $ResponseBlock = "`r`n### Claude #$MsgNum ($Timestamp)`r`n`r`n$LastResponse`r`n`r`n---`r`n"
             $ResponseBlock | Out-File -FilePath $LogFile -Encoding UTF8 -Append
         }
     }
 }
 
-# === 递增编号并记录当前用户提示词 ===
+# === Increment counter and record current user prompt ===
 $MsgNum = $MsgNum + 1
 $MsgNum | Out-File -FilePath $CounterFile -Encoding UTF8 -NoNewline
 
-$PromptBlock = @"
-
-### 👤 用户 #$MsgNum ($Timestamp)
-
-$UserPrompt
-
-"@
+$PromptBlock = "`r`n### User #$MsgNum ($Timestamp)`r`n`r`n$UserPrompt`r`n"
 $PromptBlock | Out-File -FilePath $LogFile -Encoding UTF8 -Append
 
 exit 0
