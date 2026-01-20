@@ -1,0 +1,21 @@
+{
+  "name": "prompt-logger",
+  "version": "1.1.0",
+  "description": "自动记录 Claude Code 对话（用户提示词 + Claude 响应）到项目目录的历史文件中",
+  "author": {
+    "name": "liguanglai",
+    "url": "https://github.com/liguanglai"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liguanglai/prompt-logger-skill"
+  },
+  "keywords": [
+    "prompt",
+    "logger",
+    "history",
+    "conversation",
+    "logging"
+  ],
+  "license": "MIT"
+}

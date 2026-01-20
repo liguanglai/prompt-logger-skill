@@ -13,7 +13,19 @@
 
 ## 安装
 
-### 本地安装 (macOS / Linux)
+### 方式 1: Plugin 安装（推荐）
+
+使用 Claude Code 的 Plugin 系统一键安装：
+
+```bash
+# 添加 marketplace
+/plugin marketplace add liguanglai/prompt-logger-skill
+
+# 安装插件
+/plugin install prompt-logger@liguanglai-plugins
+```
+
+### 方式 2: 本地安装 (macOS / Linux)
 
 ```bash
 curl -LO https://github.com/liguanglai/prompt-logger-skill/releases/latest/download/prompt-logger-macos.tar.gz
@@ -22,16 +34,16 @@ cd prompt-logger-skill-package
 ./install.sh
 ```
 
-### 本地安装 (Windows)
+### 方式 3: 本地安装 (Windows)
 
 ```powershell
 # 下载并解压 prompt-logger-macos.tar.gz 后
 .\install.ps1
 ```
 
-### DevContainer 安装
+### 方式 4: DevContainer 安装
 
-#### 方式 1: 宿主机配置（推荐，永久生效）
+#### 宿主机配置（推荐，永久生效）
 
 **macOS / Linux:**
 ```bash
@@ -48,18 +60,14 @@ Invoke-WebRequest -Uri "https://github.com/liguanglai/prompt-logger-skill/releas
 # 然后在 VS Code 中 Rebuild Container
 ```
 
-脚本会自动在 `devcontainer.json` 中添加：
-- `postCreateCommand`: 容器创建时自动安装
-- `containerEnv.CLAUDE_PROJECT_DIR`: 日志输出目录
-
-#### 方式 2: 容器内安装（临时）
+#### 容器内安装（临时）
 
 ```bash
 # 进入容器后执行
 curl -fsSL https://github.com/liguanglai/prompt-logger-skill/releases/latest/download/install-in-container.sh | bash
 ```
 
-#### 方式 3: 手动配置 devcontainer.json
+#### 手动配置 devcontainer.json
 
 ```json
 {
@@ -122,24 +130,33 @@ curl -fsSL https://github.com/liguanglai/prompt-logger-skill/releases/latest/dow
 
 ```
 prompt-logger-skill/
-├── install.sh                   # 本地安装 (macOS/Linux)
-├── install.ps1                  # 本地安装 (Windows)
-├── install-devcontainer.sh      # DevContainer 配置 (macOS/Linux 宿主机)
-├── install-devcontainer.ps1     # DevContainer 配置 (Windows 宿主机)
-├── install-in-container.sh      # 容器内安装
+├── .claude-plugin/
+│   ├── plugin.json              # Plugin 清单
+│   └── marketplace.json         # Marketplace 清单
+├── skills/
+│   └── prompt-logger/
+│       └── SKILL.md             # Skill 定义
 ├── hooks/
 │   ├── session-start.sh         # 会话启动
 │   ├── log-prompt.sh            # 记录提示词
 │   └── log-response.sh          # 记录响应
-├── skills/
-│   └── prompt-logger/
-│       └── SKILL.md             # Skill 定义
+├── install.sh                   # 本地安装 (macOS/Linux)
+├── install.ps1                  # 本地安装 (Windows)
+├── install-devcontainer.sh      # DevContainer 配置 (macOS/Linux)
+├── install-devcontainer.ps1     # DevContainer 配置 (Windows)
+├── install-in-container.sh      # 容器内安装
 └── docker/                      # Docker/DevContainer 参考配置
 ```
 
 ## 卸载
 
-### macOS / Linux
+### Plugin 卸载
+
+```bash
+/plugin uninstall prompt-logger
+```
+
+### 本地卸载 (macOS / Linux)
 
 ```bash
 rm -rf ~/.claude/skills/prompt-logger
@@ -149,7 +166,7 @@ rm ~/.claude/hooks/log-response.sh
 # 手动编辑 ~/.claude/settings.json 移除 hooks 配置
 ```
 
-### Windows
+### 本地卸载 (Windows)
 
 ```powershell
 Remove-Item -Recurse "$env:USERPROFILE\.claude\skills\prompt-logger"
@@ -158,7 +175,7 @@ Remove-Item "$env:USERPROFILE\.claude\hooks\log-prompt.ps1"
 # 手动编辑 settings.json 移除 hooks 配置
 ```
 
-### DevContainer
+### DevContainer 卸载
 
 从 `devcontainer.json` 中移除 `postCreateCommand` 和 `containerEnv.CLAUDE_PROJECT_DIR`。
 
