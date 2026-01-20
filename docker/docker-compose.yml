@@ -1,0 +1,69 @@
+# Prompt Logger Skill - Docker Compose 配置示例
+#
+# 使用方法:
+#   1. 将此文件复制到你的项目目录
+#   2. 根据需要修改配置
+#   3. 运行: docker-compose up -d
+
+version: '3.8'
+
+services:
+  claude-code:
+    # 方式 1: 使用预构建的镜像
+    # image: your-registry/claude-code-with-prompt-logger:latest
+
+    # 方式 2: 从 Dockerfile 构建
+    build:
+      context: ../  # prompt-logger-skill-package 目录
+      dockerfile: docker/Dockerfile
+
+    container_name: claude-code-dev
+
+    # 交互模式
+    stdin_open: true
+    tty: true
+
+    # 环境变量
+    environment:
+      - CLAUDE_PROJECT_DIR=/workspace
+      # 如果需要 Claude API
+      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+    # 挂载卷
+    volumes:
+      # 挂载你的项目代码
+      - ../../../your-project:/workspace
+
+      # 持久化日志文件 (可选)
+      # - ./claude-logs:/workspace/claude_prompt-history
+
+      # 如果需要动态更新 hooks (开发模式)
+      # - ../hooks:/root/.claude/hooks:ro
+
+    # 工作目录
+    working_dir: /workspace
+
+---
+# 多项目配置示例
+# 如果你有多个项目需要使用 Prompt Logger
+
+# services:
+#   project-a:
+#     build:
+#       context: ../
+#       dockerfile: docker/Dockerfile
+#     environment:
+#       - CLAUDE_PROJECT_DIR=/workspace
+#     volumes:
+#       - /path/to/project-a:/workspace
+#     working_dir: /workspace
+#
+#   project-b:
+#     build:
+#       context: ../
+#       dockerfile: docker/Dockerfile
+#     environment:
+#       - CLAUDE_PROJECT_DIR=/workspace
+#     volumes:
+#       - /path/to/project-b:/workspace
+#     working_dir: /workspace

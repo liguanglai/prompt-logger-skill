@@ -1,0 +1,47 @@
+{
+  "name": "Claude Code with Prompt Logger",
+  "dockerFile": "../Dockerfile",
+  "context": "../..",
+
+  // 容器内工作目录
+  "workspaceFolder": "/workspace",
+
+  // 挂载配置
+  "mounts": [
+    // 挂载本地项目到容器
+    "source=${localWorkspaceFolder},target=/workspace,type=bind"
+  ],
+
+  // 环境变量
+  "containerEnv": {
+    "CLAUDE_PROJECT_DIR": "/workspace"
+  },
+
+  // 容器创建后执行的命令
+  "postCreateCommand": "echo 'Prompt Logger Skill ready!' && ls -la ~/.claude/hooks/",
+
+  // VS Code 扩展 (可选)
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "dbaeumer.vscode-eslint"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  // 功能特性
+  "features": {
+    // 如果需要 Git
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+
+  // 转发端口 (根据需要配置)
+  // "forwardPorts": [3000, 8080],
+
+  // 以 root 用户运行 (确保可以访问 ~/.claude)
+  "remoteUser": "root"
+}

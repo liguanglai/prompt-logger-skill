@@ -1,0 +1,208 @@
+name: Post-Release Postmortem Generator
+
+on:
+  # Release 发布后触发
+  release:
+    types: [published]
+  # 手动触发
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to analyze'
+        required: true
+
+env:
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+jobs:
+  generate-postmortem:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get release info
+        id: release-info
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+          else
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+          fi
+
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
+          # 获取上一个 tag
+          PREV_TAG=$(git describe --tags --abbrev=0 $RELEASE_TAG^ 2>/dev/null || echo "")
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
+      - name: Get fix commits in this release
+        id: get-fixes
+        run: |
+          RELEASE_TAG="${{ steps.release-info.outputs.release_tag }}"
+          PREV_TAG="${{ steps.release-info.outputs.prev_tag }}"
+
+          if [ -z "$PREV_TAG" ]; then
+            FIX_COMMITS=$(git log --oneline $RELEASE_TAG | grep -i "fix" || echo "")
+          else
+            FIX_COMMITS=$(git log --oneline $PREV_TAG..$RELEASE_TAG | grep -i "fix" || echo "")
+          fi
+
+          if [ -z "$FIX_COMMITS" ]; then
+            echo "No fix commits found in this release"
+            echo "has_fixes=false" >> $GITHUB_OUTPUT
+          else
+            echo "$FIX_COMMITS" > /tmp/fix_commits.txt
+            echo "has_fixes=true" >> $GITHUB_OUTPUT
+
+            # 获取每个 fix commit 的详细信息
+            echo "" > /tmp/fix_details.txt
+            echo "$FIX_COMMITS" | while read line; do
+              HASH=$(echo "$line" | cut -d' ' -f1)
+              git show $HASH --stat >> /tmp/fix_details.txt
+              echo "---" >> /tmp/fix_details.txt
+            done
+          fi
+
+      - name: Load existing postmortems
+        if: steps.get-fixes.outputs.has_fixes == 'true'
+        run: |
+          # 获取现有 postmortem 的最大编号
+          MAX_NUM=$(ls postmortem/PM-*.md 2>/dev/null | sed 's/.*PM-[0-9]*-\([0-9]*\).*/\1/' | sort -n | tail -1 || echo "0")
+          NEXT_NUM=$(printf "%03d" $((10#$MAX_NUM + 1)))
+          YEAR=$(date +%Y)
+
+          echo "NEXT_PM_ID=PM-$YEAR-$NEXT_NUM" >> $GITHUB_ENV
+
+          # 收集现有 postmortems
+          cat postmortem/PM-*.md 2>/dev/null > /tmp/existing_postmortems.txt || echo "" > /tmp/existing_postmortems.txt
+
+      - name: Generate postmortem with AI
+        if: steps.get-fixes.outputs.has_fixes == 'true' && env.ANTHROPIC_API_KEY != ''
+        id: generate-pm
+        run: |
+          FIX_COMMITS=$(cat /tmp/fix_commits.txt)
+          FIX_DETAILS=$(cat /tmp/fix_details.txt)
+          EXISTING_PMS=$(cat /tmp/existing_postmortems.txt)
+          TEMPLATE=$(cat postmortem/TEMPLATE.md)
+
+          PROMPT="你是一个专业的软件工程师，负责撰写 Postmortem（尸检报告）。
+
+请根据以下 fix commits 生成一份专业的 Postmortem 报告。
+
+## Fix Commits 列表:
+$FIX_COMMITS
+
+## Fix Commits 详情:
+$FIX_DETAILS
+
+## 现有的 Postmortems（供参考，避免重复）:
+$EXISTING_PMS
+
+## Postmortem 模板:
+$TEMPLATE
+
+请生成一份完整的 Postmortem 报告，格式遵循模板。
+- ID 使用: $NEXT_PM_ID
+- 如果多个 fix 相关，可以合并成一个 postmortem
+- 如果 fix 与现有 postmortem 重复或相关，请注明
+- 确保包含检测规则，便于 CI 自动检查
+- 使用中文撰写
+
+只输出 Markdown 格式的 Postmortem 内容，不要有其他说明。"
+
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "{
+              \"model\": \"claude-sonnet-4-20250514\",
+              \"max_tokens\": 4096,
+              \"messages\": [{\"role\": \"user\", \"content\": $(echo "$PROMPT" | jq -Rs .)}]
+            }" | jq -r '.content[0].text // ""')
+
+          if [ -n "$RESPONSE" ] && [ "$RESPONSE" != "null" ]; then
+            # 生成文件名
+            TITLE=$(echo "$RESPONSE" | grep -m1 "^# " | sed 's/^# //' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | cut -c1-50)
+            FILENAME="${NEXT_PM_ID}-${TITLE}.md"
+
+            echo "$RESPONSE" > "postmortem/$FILENAME"
+            echo "generated_file=postmortem/$FILENAME" >> $GITHUB_OUTPUT
+            echo "generated=true" >> $GITHUB_OUTPUT
+          else
+            echo "generated=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update postmortem index
+        if: steps.generate-pm.outputs.generated == 'true'
+        run: |
+          # 更新 README.md 中的索引表格
+          NEW_FILE="${{ steps.generate-pm.outputs.generated_file }}"
+          FILENAME=$(basename "$NEW_FILE")
+
+          # 提取标题（从生成的文件）
+          TITLE=$(grep -m1 "^# " "$NEW_FILE" | sed 's/^# //' | head -c 60)
+          SEVERITY=$(grep -m1 "严重级别" "$NEW_FILE" | sed 's/.*| *\(.*\) *|$/\1/' | xargs)
+
+          # 在 README 的索引表格中添加新条目
+          sed -i "/^| \[PM-/a | [$NEXT_PM_ID](./$FILENAME) | $TITLE | $SEVERITY | 已修复 |" postmortem/README.md
+
+      - name: Create Pull Request
+        if: steps.generate-pm.outputs.generated == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "docs: 添加 ${{ env.NEXT_PM_ID }} Postmortem 报告"
+          title: "📋 Postmortem: ${{ env.NEXT_PM_ID }}"
+          body: |
+            ## 自动生成的 Postmortem 报告
+
+            本 PR 由 Post-Release Postmortem Generator 自动创建。
+
+            ### Release 信息
+            - Tag: ${{ steps.release-info.outputs.release_tag }}
+            - 上一个 Tag: ${{ steps.release-info.outputs.prev_tag }}
+
+            ### 生成的文件
+            - ${{ steps.generate-pm.outputs.generated_file }}
+
+            ### 检查清单
+            - [ ] 确认 Postmortem 内容准确
+            - [ ] 确认检测规则可用
+            - [ ] 确认没有敏感信息
+
+            ---
+            🤖 自动生成 by GitHub Actions
+          branch: postmortem/${{ env.NEXT_PM_ID }}
+          delete-branch: true
+
+      - name: Summary
+        run: |
+          echo "## Post-Release Postmortem Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release:** ${{ steps.release-info.outputs.release_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.get-fixes.outputs.has_fixes }}" == "true" ]; then
+            echo "### Fix Commits Found:" >> $GITHUB_STEP_SUMMARY
+            cat /tmp/fix_commits.txt >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            if [ "${{ steps.generate-pm.outputs.generated }}" == "true" ]; then
+              echo "### ✅ Postmortem Generated" >> $GITHUB_STEP_SUMMARY
+              echo "File: ${{ steps.generate-pm.outputs.generated_file }}" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "### ⚠️ Postmortem Generation Failed" >> $GITHUB_STEP_SUMMARY
+              echo "Please check the AI API configuration." >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "### ✅ No Fix Commits" >> $GITHUB_STEP_SUMMARY
+            echo "No fix commits found in this release. No postmortem needed." >> $GITHUB_STEP_SUMMARY
+          fi
